@@ -15,4 +15,7 @@ def getcoordinate(addressLine, city, state):  #takes 3 parameters for using as l
     mainCoordinateApi = f"{coordinateApi}{addressLine},{city},{state}"
     r = requests.get(mainCoordinateApi)
     locationData = r.json()["results"][0]["locations"][0]
-    return 
+    print(locationData)
+    return locationData
+
+
