@@ -6,10 +6,15 @@ from sqlalchemy.orm import Session
 from getcoordinate import getcoordinate
 from geopy.distance import geodesic
 
-app = FastAPI()
+app = FastAPI(
+    title='Addressbook',
+    description="Check Coordinates by adding addresses"
+)
 
 model.Base.metadata.create_all(engine)
 
+
+#database
 def getDb():
     db = SessionLocal()
     try:
@@ -24,7 +29,7 @@ async def main():
 
 # creating address frombody 
 
-@app.post("/createAddress", status_code=status.HTTP_201_CREATED)
+@app.post("/createaddress", status_code=status.HTTP_201_CREATED)
 def create_address(req: schema.Address, res:Response, db :Session = Depends(getDb)):
     try:
         # removing leading and ending extra space 
@@ -36,7 +41,7 @@ def create_address(req: schema.Address, res:Response, db :Session = Depends(getD
         # getting the location & coordinate data from mapquest api 
         locationData = getcoordinate(addressLine, city, state)
 
-        # creaing row for address 
+        # creaing rows for address 
         newAddress = model.Address(
             addressLine = addressLine,
             city = city,
@@ -66,9 +71,9 @@ def create_address(req: schema.Address, res:Response, db :Session = Depends(getD
         }
 
 
-# get all the address 
+# getting all the address 
 
-@app.get("/readAllAddress", status_code=status.HTTP_200_OK)
+@app.get("/readalladdress", status_code=status.HTTP_200_OK)
 def get_all_address(res: Response, db :Session = Depends(getDb)):
     try:
         # get all the address data from  database and send to user 
@@ -87,9 +92,9 @@ def get_all_address(res: Response, db :Session = Depends(getDb)):
 
 
 
-# update the address through id and request body 
+# updating the address through id and request.body 
 
-@app.put("/updateAddress/{id}", status_code=status.HTTP_202_ACCEPTED)
+@app.put("/updateaddress/{id}", status_code=status.HTTP_202_ACCEPTED)
 def update_address(id, req: schema.Address, res: Response, db: Session = Depends(getDb)):
     try:
         # removing leading and ending extra space 
@@ -115,7 +120,7 @@ def update_address(id, req: schema.Address, res: Response, db: Session = Depends
         # updating address through id and query params 
         updatedAddress = db.query(model.Address).filter(model.Address.id == id).update(newAddress)
 
-        # if data not found in database 
+        # if data is not  found in database  sending error to user
         if not updatedAddress:
             res.status_code = status.HTTP_404_NOT_FOUND
             return {
@@ -125,7 +130,7 @@ def update_address(id, req: schema.Address, res: Response, db: Session = Depends
 
         db.commit()
 
-        # if data got sucessfully updated 
+        # if data got sucessfully updated sending ok status
         return {
             "status" : "ok",
             "data" : updatedAddress
@@ -139,7 +144,7 @@ def update_address(id, req: schema.Address, res: Response, db: Session = Depends
         }
 
 
-# delete the address through id 
+# deleting the address through id 
 
 @app.delete("/deleteAddress/{id}", status_code=status.HTTP_202_ACCEPTED)
 def delete_address(id, res: Response, db: Session = Depends(getDb) ):
@@ -169,3 +174,44 @@ def delete_address(id, res: Response, db: Session = Depends(getDb) ):
             "status" : "failed",
             "msg" : str(e)
         }
+
+# get those address that are nearest to useraddress 
+
+@app.get("/readnearestAddress", status_code=status.HTTP_200_OK)
+def get_nearest_address(res: Response, addressLine, city, state, db :Session = Depends(getDb)):
+    try:
+        # getting the data from mapquest api 
+        locationData = getcoordinate(addressLine, city, state)
+        maincoordinate = locationData["latLng"]
+
+        firstCoordinate = (maincoordinate["lat"] , maincoordinate["lng"])
+
+        allAddress = db.query(model.Address).all()
+
+        someAddress = []
+
+        """
+        In here geodesic returning the distance between main address and all database address,
+        If the distance is below 100km than only it's save the address to someAddress array. 
+
+        """
+
+        for address in allAddress:
+            secondCoordinate = (address.latitude, address.longitude)
+            distanceBetween = geodesic(firstCoordinate, secondCoordinate).km
+            if distanceBetween <= 100:
+                someAddress.append(address)
+        
+
+        # sending the nearest address data to user
+        return {
+            "status": "ok",
+            "data" : someAddress
+        }
+
+    except Exception as e:
+        res.status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        return {
+            "status" : "failed",
+            "msg" : str(e)
+        }        
